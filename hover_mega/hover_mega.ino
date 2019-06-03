@@ -10,6 +10,7 @@ Servo ESC[MOTORES];
 
 unsigned long starttime;
 byte msg[3];
+byte type;
 
 //RADIO
 
@@ -143,25 +144,35 @@ bool readSerial() {
   return false;
 }
 
-bool readRF(int *valRead, int*idRead) {
+bool readRF(int *valRead, int*idRead) {     
   byte pipeNo;
   if (radio.available(&pipeNo)){
-    radio.read( &msg, 3 );
-    byte prueba = 0xfa;
-    radio.writeAckPayload(pipeNo, &prueba, 1);
-
-    unsigned char tempChar;
-    int id = msg[0];
-    int value = 0;
-    value |= msg[1];
-    value <<= 8;
-    tempChar = (unsigned char) msg[2];
-    value |= tempChar;
-
-    if (!checkErrors(id, value)) {
-      *idRead = id;
-      *valRead = value;
-      return true;
+      radio.read( &type, 1);
+    if(type == 0) {
+      radio.read(&msg, 4);
+      
+      unsigned char tempChar;
+      int id = msg[1];
+      int value = 0;
+      value |= msg[2];
+      value <<= 8;
+      tempChar = (unsigned char) msg[3];
+      value |= tempChar;
+  
+      if (!checkErrors(id, value)) {
+        *idRead = id;
+        *valRead = value;
+        return true;
+      }
+    } else {
+      byte cellID[2];
+      radio.read(cellID, 2);
+      byte prueba[2];
+      prueba[0]= 0x14;
+      prueba[1]= 0x14;
+      radio.writeAckPayload(pipeNo, &prueba, 2);
+      Serial.print(cellID[1]);
+      Serial.println(" payload");
     }
   }
   return false;
