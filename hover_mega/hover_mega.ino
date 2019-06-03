@@ -16,16 +16,16 @@ byte msg[3];
 bool radioNumber = 0;
 RF24 radio(9,10);
 
-byte addresses[][6] = {"1Node","2Node"}; 
+byte addresses[][6] = {"1Node","2Node"};
 
 //END RADIO
 
 void blink(int n) {
   for(int i=0;i<n;i++){
     digitalWrite(LED_BUILTIN, HIGH);
-    delay(100);                      
+    delay(100);
     digitalWrite(LED_BUILTIN, LOW);
-    delay(100);  
+    delay(100);
   }
 }
 
@@ -33,40 +33,40 @@ void initializeESC() {
   for(int i=0;i<N_ESC;i++){
     ESC[i].writeMicroseconds(1000);
   }
-  
+
   delay(1000);
-  
+
   for(int i=0;i<N_ESC;i++) {
     ESC[i].writeMicroseconds(2400);
   }
-  
+
   delay(2000);
-  
+
   for(int i=0;i<N_ESC;i++) {
     ESC[i].writeMicroseconds(1000);
   }
 }
 
 void setup() {
-  pinMode(LED_BUILTIN, OUTPUT); 
+  pinMode(LED_BUILTIN, OUTPUT);
 
   //Motores
   ESC[0].attach(3);
   ESC[1].attach(5);
-  
+
   ///Activar los ESC
   delay(1000);
-  
+
   initializeESC();
-  
+
   //Servo
   ESC[2].attach(6);
-  ESC[2].write(50); 
-   
+  ESC[2].write(50);
+
   //Iniciar puerto serial
   Serial.begin(9600);
   Serial.setTimeout(10);
-  
+
   //Done
   blink(5);
 
@@ -85,26 +85,19 @@ int getPpm(int bytes) {
 
 void loop() {
   starttime = millis();
-  
-  if(readRF())
+
+  int id;
+  int value;
+  if(readRF(&value, &id))
   {
-    
-    unsigned char tempChar;
-    int id = msg[0];
-    int value = 0;
-    value |= msg[1];
-    value <<= 8;
-    tempChar = (unsigned char) msg[2];
-    value |= tempChar;
-    
-    if (checkErrors( tempChar)) 
-      return;      
+
+
 
     Serial.print("ID: ");
     Serial.println(id);
     Serial.print("Value: ");
     Serial.println(value);
-    
+
     if(id == 2) {
       ESC[id].write(value);
       Serial.println("servo");
@@ -112,17 +105,17 @@ void loop() {
     else {
       ESC[id].writeMicroseconds(value);
     }
-  }  
+  }
 }
-bool checkErrors(int msg) {
-  switch(msg){
-    case 0:
-    case 1:
-    case 2:
-      return true;
-    break;
-    }
-    return false;
+bool checkErrors(int id, int value) {
+  if(id == 2) {
+    if(value < 360 && value > 0)
+      return false;
+  } else {
+    if(value > 1000 && value < 1900)
+      return false;
+  }
+  return true;
 }
 
 void initRF() {
@@ -130,7 +123,7 @@ void initRF() {
 
   radio.enableAckPayload();
   radio.enableDynamicPayloads();
-  
+
   if(radioNumber){
     radio.openWritingPipe(addresses[1]);
     radio.openReadingPipe(1,addresses[0]);
@@ -150,11 +143,26 @@ bool readSerial() {
   return false;
 }
 
-bool readRF() {
+bool readRF(int *valRead, int*idRead) {
   byte pipeNo;
   if (radio.available(&pipeNo)){
     radio.read( &msg, 3 );
-    return true;
+    byte prueba = 0xfa;
+    radio.writeAckPayload(pipeNo, &prueba, 1);
+
+    unsigned char tempChar;
+    int id = msg[0];
+    int value = 0;
+    value |= msg[1];
+    value <<= 8;
+    tempChar = (unsigned char) msg[2];
+    value |= tempChar;
+
+    if (!checkErrors(id, value)) {
+      *idRead = id;
+      *valRead = value;
+      return true;
+    }
   }
   return false;
 }
